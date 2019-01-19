@@ -242,8 +242,8 @@ evsig_set_handler_(struct event_base *base,
 	}
 
 	/* allocate space for previous handler out of dynamic array */
-	sig->sh_old[evsignal] = mm_malloc(sizeof *sig->sh_old[evsignal]);
-	if (sig->sh_old[evsignal] == NULL) {
+	sig->sh_old[evsignal] = mm_malloc(sizeof *sig->sh_old[evsignal]); //注意*, ->, []这三个运算符的优先级. 这个表达式等效于struct sigaction.
+	if (sig->sh_old[evsignal] == NULL) { //sig->sh_old就是struct sigaction的指针数组.这个数组按signal No. 来索引。
 		event_warn("malloc");
 		return (-1);
 	}
@@ -252,7 +252,7 @@ evsig_set_handler_(struct event_base *base,
 #ifdef EVENT__HAVE_SIGACTION
 	memset(&sa, 0, sizeof(sa));
 	sa.sa_handler = handler;
-	sa.sa_flags |= SA_RESTART;
+	sa.sa_flags |= SA_RESTART; //SA_RESTART可以让socket类的api,在sighandler 退出以后，能继续执行，而不是返回出错，并置errorno为EINTR。
 	sigfillset(&sa.sa_mask);
 
 	if (sigaction(evsignal, &sa, sig->sh_old[evsignal]) == -1) {

@@ -48,7 +48,7 @@ main(int argc, char **argv)
 	WSAStartup(0x0201, &wsa_data);
 #endif
 
-	base = event_base_new();
+	base = event_base_new(); //创建epfd, pipe2 (eventfd), timerfd　。。。
 	if (!base) {
 		fprintf(stderr, "Could not initialize libevent!\n");
 		return 1;
@@ -58,7 +58,7 @@ main(int argc, char **argv)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(PORT);
 
-	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,
+	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,　//创建socket, bind, listen, 添加一个event到event_map, epoll_ctl, ADD。
 	    LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
 	    (struct sockaddr*)&sin,
 	    sizeof(sin));
