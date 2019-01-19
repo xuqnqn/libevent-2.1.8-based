@@ -58,8 +58,9 @@ main(int argc, char **argv)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(PORT);
 
-	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,　//创建socket, bind, listen, 添加一个event到event_map, epoll_ctl, ADD。
-	    LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
+    //创建socket, bind, listen, 添加一个event到event_map, epoll_ctl, ADD。
+	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,
+        LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
 	    (struct sockaddr*)&sin,
 	    sizeof(sin));
 
