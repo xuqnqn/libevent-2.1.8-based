@@ -446,7 +446,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 	} else
 #endif
 	if (tv != NULL) {
-		timeout = evutil_tv_to_msec_(tv);
+		timeout = evutil_tv_to_msec_(tv);   //把timeval的时间换算成毫秒值的timeout，作为epoll_wait的阻塞超时值。如果timeval值为０，那么timeout就是０，即epoll_wait会立即返回，不阻塞。
 		if (timeout < 0 || timeout > MAX_EPOLL_TIMEOUT_MSEC) {
 			/* Linux kernels can wait forever if the timeout is
 			 * too big; see comment on MAX_EPOLL_TIMEOUT_MSEC. */

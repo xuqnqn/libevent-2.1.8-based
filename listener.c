@@ -392,7 +392,7 @@ listener_read_cb(evutil_socket_t fd, short what, void *p)
 	evconnlistener_cb cb;
 	evconnlistener_errorcb errorcb;
 	void *user_data;
-	LOCK(lev);
+	LOCK(lev);  //高并发的服务器上有可能会多个client同时连上服务器，libevent 内部在accept一个连接是要先lock(这样多个线程就会在这里排队争抢锁),完成以后要unlock, 再调用callback, callback 完成以后再得lock,做其他的事情。
 	while (1) {
 		struct sockaddr_storage ss;
 		ev_socklen_t socklen = sizeof(ss);

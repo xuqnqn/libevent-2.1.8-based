@@ -62,7 +62,7 @@ main(int argc, char **argv)
 	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,
         LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
 	    (struct sockaddr*)&sin,
-	    sizeof(sin));
+	    sizeof(sin));   //只有在创建listen event时指定下面两个flag，accpet的socket才是nonblock的，否则accept4出来的连接socket是block的read/write.
 
 	if (!listener) {
 		fprintf(stderr, "Could not create a listener!\n");

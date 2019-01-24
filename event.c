@@ -1564,7 +1564,7 @@ event_persist_closure(struct event_base *base, struct event *ev)
 			evutil_timeradd(&now, &delay, &run_at);
 		}
 		run_at.tv_usec |= usec_mask;
-		event_add_nolock_(ev, &run_at, 1);
+		event_add_nolock_(ev, &run_at, 1);  //如果timeval不为０，则把定时事件event添加到base的time_heap的最小堆里面去
 	}
 
 	// Save our callback before we release the lock
@@ -1603,9 +1603,9 @@ event_process_active_single_queue(struct event_base *base,
 			ev = event_callback_to_event(evcb);
 
 			if (ev->ev_events & EV_PERSIST || ev->ev_flags & EVLIST_FINALIZING)
-				event_queue_remove_active(base, evcb);
+				event_queue_remove_active(base, evcb);  //把这个active的callback从active queue里面删除
 			else
-				event_del_nolock_(ev, EVENT_DEL_NOBLOCK);
+				event_del_nolock_(ev, EVENT_DEL_NOBLOCK);   //根据ev_evcallback.evcb_flags来删除对于queue里面的callback, flags可能是EVLIST_ACTIVE, EVLIST_TIMEOUT等。EVLIST_ACTIVE则把这个active的callback从active queue里面删除。定时事件在process_timeout之后就可能被插入到active queue，变成EVLIST_ACTIVE状态
 			event_debug((
 			    "event_process_active: event: %p, %s%s%scall %p",
 			    ev,
@@ -1636,14 +1636,14 @@ event_process_active_single_queue(struct event_base *base,
 			break;
 		case EV_CLOSURE_EVENT_PERSIST:
 			EVUTIL_ASSERT(ev != NULL);
-			event_persist_closure(base, ev);
+			event_persist_closure(base, ev);    //如果事件有个timeout值，PERSIST事件会再次把event添加到base里面去。io　＝>　evmap_io, signal ＝> evmap_sig, timeout ＝> time heap
 			break;
 		case EV_CLOSURE_EVENT: {
 			void (*evcb_callback)(evutil_socket_t, short, void *);
 			EVUTIL_ASSERT(ev != NULL);
 			evcb_callback = *ev->ev_callback;
 			EVBASE_RELEASE_LOCK(base, th_base_lock);
-			evcb_callback(ev->ev_fd, ev->ev_res, ev->ev_arg);
+			evcb_callback(ev->ev_fd, ev->ev_res, ev->ev_arg);   //调用一次性事件的callback, 通常在这个callback里面再次add事件，比如IO事件，定时事件等。
 		}
 		break;
 		case EV_CLOSURE_CB_SELF: {
@@ -1731,7 +1731,7 @@ event_process_active(struct event_base *base)
 	}
 
 	for (i = 0; i < base->nactivequeues; ++i) {
-		if (TAILQ_FIRST(&base->activequeues[i]) != NULL) {
+		if (TAILQ_FIRST(&base->activequeues[i]) != NULL) { //从小数字优先级(高优先级)的队列开始处理callback
 			base->event_running_priority = i;
 			activeq = &base->activequeues[i];
 			if (i < limit_after_prio)
@@ -1923,7 +1923,7 @@ event_base_loop(struct event_base *base, int flags)
 
 		tv_p = &tv;
 		if (!N_ACTIVE_CALLBACKS(base) && !(flags & EVLOOP_NONBLOCK)) {
-			timeout_next(base, &tv_p);
+			timeout_next(base, &tv_p);   //从event base的time heap最小堆里面找出最近的定时时间值
 		} else {
 			/*
 			 * if we have active events, we just poll new events
@@ -1944,7 +1944,7 @@ event_base_loop(struct event_base *base, int flags)
 
 		clear_time_cache(base);
 
-		res = evsel->dispatch(base, tv_p);
+		res = evsel->dispatch(base, tv_p);  //如果有timeout值，即tv_p值不为NULL,那么只是会让epoll_wait在阻塞timeout时间后返回,如果tv_p值为０，epoll_wait会立即返回。poll到的events可能为０，如果有EVENT,那么就把event加到queue里面去。
 
 		if (res == -1) {
 			event_debug(("%s: dispatch returned unsuccessfully.",
@@ -1955,10 +1955,11 @@ event_base_loop(struct event_base *base, int flags)
 
 		update_time_cache(base);
 
-		timeout_process(base);
+		timeout_process(base);  //处理已经超时的活跃event, 把所有到期的timeout事件添加到active_queues里面去。（如果不是PERSIST EVENT, 只会被添加一次？）
 
 		if (N_ACTIVE_CALLBACKS(base)) {
-			int n = event_process_active(base);
+			int n = event_process_active(base); //如果是PERSIST EVENT, 如果事件有个timeout值，会再次把event添加到base里面去。io　＝>　evmap_io, signal ＝> evmap_sig, timeout ＝> time heap
+　在从active queue里面remove以后，还会被add上。
 			if ((flags & EVLOOP_ONCE)
 			    && N_ACTIVE_CALLBACKS(base) == 0
 			    && n != 0)
@@ -2442,7 +2443,7 @@ event_add(struct event *ev, const struct timeval *tv)
 
 	EVBASE_ACQUIRE_LOCK(ev->ev_base, th_base_lock);
 
-	res = event_add_nolock_(ev, tv, 0);
+	res = event_add_nolock_(ev, tv, 0); //分别添加IO event / SIGNAL事件 / 定时器事件到event_base的evmap_io / evmap_sig / time_base最小堆里面。注意有些IO/SIGNAL event, 同时有timeout属性，对于它们也要添加到time_base最小堆。
 
 	EVBASE_RELEASE_LOCK(ev->ev_base, th_base_lock);
 
@@ -2554,7 +2555,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 	EVENT_BASE_ASSERT_LOCKED(base);
 	event_debug_assert_is_setup_(ev);
 
-	event_debug((
+	event_debug((   //打印出添加是READ/WRITE/CLOSE/TIMEOUT事件，并打印出callback地址
 		 "event_add: event: %p (fd "EV_SOCK_FMT"), %s%s%s%scall %p",
 		 ev,
 		 EV_SOCK_ARG(ev->ev_fd),
@@ -2575,7 +2576,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 	 * prepare for timeout insertion further below, if we get a
 	 * failure on any step, we should not change any state.
 	 */
-	if (tv != NULL && !(ev->ev_flags & EVLIST_TIMEOUT)) {
+	if (tv != NULL && !(ev->ev_flags & EVLIST_TIMEOUT)) {   //如果timeout 最小堆为空，在这里给最小堆分配空间，给后面的timeout push 做准备
 		if (min_heap_reserve_(&base->timeheap,
 			1 + min_heap_size_(&base->timeheap)) == -1)
 			return (-1);  /* ENOMEM == errno */
@@ -2595,13 +2596,13 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 #endif
 
 	if ((ev->ev_events & (EV_READ|EV_WRITE|EV_CLOSED|EV_SIGNAL)) &&
-	    !(ev->ev_flags & (EVLIST_INSERTED|EVLIST_ACTIVE|EVLIST_ACTIVE_LATER))) {
+	    !(ev->ev_flags & (EVLIST_INSERTED|EVLIST_ACTIVE|EVLIST_ACTIVE_LATER))) {    //先把事件添加到evmap里面，如果添加失败，则添加到event_queue里面。
 		if (ev->ev_events & (EV_READ|EV_WRITE|EV_CLOSED))
-			res = evmap_io_add_(base, ev->ev_fd, ev);
+			res = evmap_io_add_(base, ev->ev_fd, ev);   //添加到evmap_io里面
 		else if (ev->ev_events & EV_SIGNAL)
-			res = evmap_signal_add_(base, (int)ev->ev_fd, ev);
+			res = evmap_signal_add_(base, (int)ev->ev_fd, ev);  //添加到evmap_signal里面
 		if (res != -1)
-			event_queue_insert_inserted(base, ev);
+			event_queue_insert_inserted(base, ev);  //添加到event_queue里面。
 		if (res == 1) {
 			/* evmap says we need to notify the main thread. */
 			notify = 1;
@@ -2613,7 +2614,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 	 * we should change the timeout state only if the previous event
 	 * addition succeeded.
 	 */
-	if (res != -1 && tv != NULL) {
+	if (res != -1 && tv != NULL) {  //只有IO或signal事件添加成功了，或者是单纯的timeout事件，那么才改变timeout 状态
 		struct timeval now;
 		int common_timeout;
 #ifdef USE_REINSERT_TIMEOUT
@@ -2671,7 +2672,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 			ev->ev_timeout.tv_usec |=
 			    (tv->tv_usec & ~MICROSECONDS_MASK);
 		} else {
-			evutil_timeradd(&now, tv, &ev->ev_timeout);
+			evutil_timeradd(&now, tv, &ev->ev_timeout); //把定时的时间值加到当前时间上，并设置到event对象里面去，还没添加到base里面。
 		}
 
 		event_debug((
@@ -2681,7 +2682,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 #ifdef USE_REINSERT_TIMEOUT
 		event_queue_reinsert_timeout(base, ev, was_common, common_timeout, old_timeout_idx);
 #else
-		event_queue_insert_timeout(base, ev);
+		event_queue_insert_timeout(base, ev);   //把event添加到base的time_heap的最小堆里面去，并且设置上event的callback_flag为EVLIST_TIMEOUT, 这个最小堆就是作为计算最近超时事件的数据结构
 #endif
 
 		if (common_timeout) {
@@ -2813,11 +2814,11 @@ event_del_nolock_(struct event *ev, int blocking)
 		 * dispatch loop early anyway, so we wouldn't gain anything by
 		 * doing it.
 		 */
-		event_queue_remove_timeout(base, ev);
+		event_queue_remove_timeout(base, ev);   //从event base的time heap最小堆里面删除该定时事件
 	}
 
 	if (ev->ev_flags & EVLIST_ACTIVE)
-		event_queue_remove_active(base, event_to_event_callback(ev));
+		event_queue_remove_active(base, event_to_event_callback(ev));   //把这个active的callback从active queue里面删除
 	else if (ev->ev_flags & EVLIST_ACTIVE_LATER)
 		event_queue_remove_active_later(base, event_to_event_callback(ev));
 
@@ -2909,7 +2910,7 @@ event_active_nolock_(struct event *ev, int res, short ncalls)
 		ev->ev_pncalls = NULL;
 	}
 
-	event_callback_activate_nolock_(base, event_to_event_callback(ev));
+	event_callback_activate_nolock_(base, event_to_event_callback(ev)); //把这个event callback加到base的对应优先级的active queue里面去。并且设置上这个callback的EVLIST_ACTIVE标志，表示本event的这个callback位于active queue里面。
 }
 
 void
@@ -2970,7 +2971,7 @@ event_callback_activate_nolock_(struct event_base *base,
 		break;
 	}
 
-	event_queue_insert_active(base, evcb);
+	event_queue_insert_active(base, evcb); //把这个event callback加到base的对应优先级的active queue里面去。并且设置上这个callback的EVLIST_ACTIVE标志，表示本event的这个callback位于active queue里面。
 
 	if (EVBASE_NEED_NOTIFY(base))
 		evthread_notify_base(base);
@@ -3093,7 +3094,7 @@ timeout_next(struct event_base *base, struct timeval **tv_p)
 	struct timeval *tv = *tv_p;
 	int res = 0;
 
-	ev = min_heap_top_(&base->timeheap);
+	ev = min_heap_top_(&base->timeheap);    //从time heap最小堆里面找出最近的定时时间值。
 
 	if (ev == NULL) {
 		/* if no time-based events are active wait for I/O */
@@ -3106,12 +3107,12 @@ timeout_next(struct event_base *base, struct timeval **tv_p)
 		goto out;
 	}
 
-	if (evutil_timercmp(&ev->ev_timeout, &now, <=)) {
+	if (evutil_timercmp(&ev->ev_timeout, &now, <=)) {   //过期的定时事件，就把它的时间设置为０，即后面的epoll_wait会立即返回，poll出已经ready的事件。
 		evutil_timerclear(tv);
 		goto out;
 	}
 
-	evutil_timersub(&ev->ev_timeout, &now, tv);
+	evutil_timersub(&ev->ev_timeout, &now, tv); //从绝对时间算出相当与当前的相对时间
 
 	EVUTIL_ASSERT(tv->tv_sec >= 0);
 	EVUTIL_ASSERT(tv->tv_usec >= 0);
@@ -3135,16 +3136,16 @@ timeout_process(struct event_base *base)
 
 	gettime(base, &now);
 
-	while ((ev = min_heap_top_(&base->timeheap))) {
-		if (evutil_timercmp(&ev->ev_timeout, &now, >))
+	while ((ev = min_heap_top_(&base->timeheap))) { //把到期的定时事件全部处理一下
+		if (evutil_timercmp(&ev->ev_timeout, &now, >)) //如果定时的时间还没到，就退出循环
 			break;
 
 		/* delete this event from the I/O queues */
-		event_del_nolock_(ev, EVENT_DEL_NOBLOCK);
+		event_del_nolock_(ev, EVENT_DEL_NOBLOCK);   //从event base的time heap最小堆里面删除该定时事件。如果这个定时事件不是PERSIST的，或者不再次加到base的time heap里面，那么这个定时事件就不会再发生。
 
 		event_debug(("timeout_process: event: %p, call %p",
 			 ev, ev->ev_callback));
-		event_active_nolock_(ev, EV_TIMEOUT, 1);
+		event_active_nolock_(ev, EV_TIMEOUT, 1);    //把这个ev事件的callback closure(timeout事件)添加到event base的active_queues里面去,等待这个callback被调用。
 	}
 }
 
@@ -3323,7 +3324,7 @@ event_queue_insert_inserted(struct event_base *base, struct event *ev)
 }
 
 static void
-event_queue_insert_active(struct event_base *base, struct event_callback *evcb)
+event_queue_insert_active(struct event_base *base, struct event_callback *evcb) //把这个event callback加到base的对应优先级的active queue里面去。并且设置上这个callback的EVLIST_ACTIVE标志，表示本event的这个callback位于active queue里面。
 {
 	EVENT_BASE_ASSERT_LOCKED(base);
 
