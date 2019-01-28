@@ -1958,8 +1958,7 @@ event_base_loop(struct event_base *base, int flags)
 		timeout_process(base);  //处理已经超时的活跃event, 把所有到期的timeout事件添加到active_queues里面去。（如果不是PERSIST EVENT, 只会被添加一次？）
 
 		if (N_ACTIVE_CALLBACKS(base)) {
-			int n = event_process_active(base); //如果是PERSIST EVENT, 如果事件有个timeout值，会再次把event添加到base里面去。io　＝>　evmap_io, signal ＝> evmap_sig, timeout ＝> time heap
-　在从active queue里面remove以后，还会被add上。
+			int n = event_process_active(base); //如果是PERSIST EVENT, 如果事件有个timeout值，在从active queue里面remove以后，还会被add上,会再次把event添加到base里面去。io　＝>　evmap_io, signal ＝> evmap_sig, timeout ＝> time heap
 			if ((flags & EVLOOP_ONCE)
 			    && N_ACTIVE_CALLBACKS(base) == 0
 			    && n != 0)
