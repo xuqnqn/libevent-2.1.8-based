@@ -459,7 +459,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 
 	EVBASE_RELEASE_LOCK(base, th_base_lock);
 
-	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);
+	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout); //虽然libevent的signal handler的flag都置了SA_RESTART，但是epoll_wait在signal handler退出以后不会restart, 而是在收到信号后返回-1,并把errno置为EINTR。
 
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 

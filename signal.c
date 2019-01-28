@@ -128,7 +128,7 @@ evsig_set_base_(struct event_base *base)
 
 /* Callback for when the signal handler write a byte to our signaling socket */
 static void
-evsig_cb(evutil_socket_t fd, short what, void *arg)
+evsig_cb(evutil_socket_t fd, short what, void *arg) //这是epoll_wait的ev_signal_pair[0]上的internal的call back.
 {
 	static char signals[1024];
 	ev_ssize_t n;
@@ -140,7 +140,7 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 
 	memset(&ncaught, 0, sizeof(ncaught));
 
-	while (1) {
+	while (1) { //一直把管道里面的数据读完，管道里面其实就是收到的所有信号的signal num, 每读到一个signal num就把对于的signal num 位图标识置上
 #ifdef _WIN32
 		n = recv(fd, signals, sizeof(signals), 0);
 #else
@@ -163,7 +163,7 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 	}
 
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
-	for (i = 0; i < NSIG; ++i) {
+	for (i = 0; i < NSIG; ++i) {    //把置上的signal NUM 对应event, 加到active queue里面，最后再dispatch的loop 里面会处理所有active的event，并调用他们的由用户自定义的call back
 		if (ncaught[i])
 			evmap_signal_active_(base, i, ncaught[i]);
 	}
@@ -196,7 +196,7 @@ evsig_init_(struct event_base *base)
 	base->sig.sh_old_max = 0;
 
 	event_assign(&base->sig.ev_signal, base, base->sig.ev_signal_pair[0],
-		EV_READ | EV_PERSIST, evsig_cb, base);
+		EV_READ | EV_PERSIST, evsig_cb, base);  //libevent在ev_signal_pair[0]上注册了internal的persist的read 事件，所以只要signal handler往管道另一端写一个字节（信号num）时，epoll就能立即收到，并调用注册在ev_signal_pair[0]上的internal的call back。这个internal的callback 会依次读取管道，一直把管道里面的数据读完，管道里面其实就是收到的所有信号的signal num, 每读到一个signal num就把对于的signal num 位图标识置上，最后把置上的signal NUM 对应event, 加到active queue里面，最后再dispatch的loop 里面会处理所有active的event，并调用他们的由用户自定义的call back。
 
 	base->sig.ev_signal.ev_flags |= EVLIST_INTERNAL;
 	event_priority_set(&base->sig.ev_signal, 0);
