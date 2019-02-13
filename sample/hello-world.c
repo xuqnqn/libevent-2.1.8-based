@@ -31,8 +31,9 @@ static const int PORT = 9995;
 
 static void listener_cb(struct evconnlistener *, evutil_socket_t,
     struct sockaddr *, int socklen, void *);
-static void conn_writecb(struct bufferevent *, void *);
 static void conn_eventcb(struct bufferevent *, short, void *);
+static void conn_writecb(struct bufferevent *, void *);
+//static void conn_writecb(evutil_socket_t fd, short events, void* user_data);
 static void signal_cb(evutil_socket_t, short, void *);
 
 int
@@ -86,6 +87,7 @@ main(int argc, char **argv)
 	return 0;
 }
 
+#if 1 
 static void
 listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
     struct sockaddr *sa, int socklen, void *user_data)
@@ -129,6 +131,31 @@ conn_eventcb(struct bufferevent *bev, short events, void *user_data)
 	 * timeouts */
 	bufferevent_free(bev);
 }
+#else
+struct event *ev = NULL;
+
+static void
+listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
+    struct sockaddr *sa, int socklen, void *user_data)
+{
+	struct event_base *base = user_data;
+    ev = event_new(base, fd, EV_WRITE, conn_writecb, user_data);  //在fd上注册一个write事件，当fd可写时，调用注册的callback: conn_writecb()
+    event_add(ev, NULL);
+}
+
+static void conn_writecb(evutil_socket_t fd, short events, void* user_data) {
+	//struct event_base *base = user_data;
+    int rc = -1;
+    rc = write(fd, MESSAGE, strlen(MESSAGE));
+    if(rc == strlen(MESSAGE)) {
+		printf("xqq flushed answer\n");
+        event_free(ev); //应该记得删除这个event, 否则会有mem leak
+        close(fd);
+    } else {
+		printf("xqq not flushed answer\n");
+    }
+}
+#endif
 
 static void
 signal_cb(evutil_socket_t sig, short events, void *user_data)

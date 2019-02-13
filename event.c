@@ -1590,7 +1590,7 @@ event_persist_closure(struct event_base *base, struct event *ev)
 static int
 event_process_active_single_queue(struct event_base *base,
     struct evcallback_list *activeq,
-    int max_to_process, const struct timeval *endtime)
+    int max_to_process, const struct timeval *endtime)  //先从active_queue里面删除active event的callback(即event_del()), 然后再调用这个event的callback
 {
 	struct event_callback *evcb;
 	int count = 0;
