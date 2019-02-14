@@ -97,15 +97,15 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
 	struct event_base *base = user_data;
 	struct bufferevent *bev;
 
-	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);  //这个fd是accept得到的连接socket fd
+	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);  //这个fd是accept得到的连接socket fd, 相当于read/write event的event_new(), 这个函数的内部注册了read/write event的内部callback, 这个内部callback负责读写数据，在完成读写后，再调用后面bufferevent_setcb()注册的读写callback,给出通知。
 	if (!bev) {
 		fprintf(stderr, "Error constructing bufferevent!");
 		event_base_loopbreak(base);
 		return;
 	}
-	bufferevent_setcb(bev, NULL, conn_writecb, conn_eventcb, NULL);
-	bufferevent_enable(bev, EV_WRITE);
-	bufferevent_disable(bev, EV_READ);
+	bufferevent_setcb(bev, NULL, conn_writecb, conn_eventcb, NULL); //这里设置异步read, write, error的callback
+	bufferevent_enable(bev, EV_WRITE);  //相当于read/write event的event_add()
+	bufferevent_disable(bev, EV_READ);  //event_del()
 
 	bufferevent_write(bev, MESSAGE, strlen(MESSAGE));   //这里的写有点像异步操作，即把数据扔给它，写完了给我个通知(调用callback)
 	bufferevent_write(bev, MESSAGE1, strlen(MESSAGE1));

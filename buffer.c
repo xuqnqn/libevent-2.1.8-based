@@ -2400,7 +2400,7 @@ done:
 
 #ifdef USE_IOVEC_IMPL
 static inline int
-evbuffer_write_iovec(struct evbuffer *buffer, evutil_socket_t fd,
+evbuffer_write_iovec(struct evbuffer *buffer, evutil_socket_t fd,   //因为evbuffer里面的内容是按照chain buf组织的，所以用writev比较合适，即一个chain buf是一个iov。
     ev_ssize_t howmuch)
 {
 	IOV_TYPE iov[NUM_WRITE_IOVEC];

@@ -320,7 +320,7 @@ bufferevent_writecb(evutil_socket_t fd, short event, void *arg)
 	 * low watermark.
 	 */
 	if (res || !connected) {
-		bufferevent_trigger_nolock_(bufev, EV_WRITE, 0);
+		bufferevent_trigger_nolock_(bufev, EV_WRITE, 0);    //写完数据后，在这里调用write buf的callback
 	}
 
 	goto done;
