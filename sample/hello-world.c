@@ -26,6 +26,8 @@
 #include <event2/event.h>
 
 static const char MESSAGE[] = "Hello, World!\n";
+static const char MESSAGE1[] = "Hello, xqq!\n";
+static const char MESSAGE2[] = "Hello, shanghai!\n";
 
 static const int PORT = 9995;
 
@@ -95,7 +97,7 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
 	struct event_base *base = user_data;
 	struct bufferevent *bev;
 
-	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+	bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);  //这个fd是accept得到的连接socket fd
 	if (!bev) {
 		fprintf(stderr, "Error constructing bufferevent!");
 		event_base_loopbreak(base);
@@ -105,16 +107,18 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
 	bufferevent_enable(bev, EV_WRITE);
 	bufferevent_disable(bev, EV_READ);
 
-	bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
+	bufferevent_write(bev, MESSAGE, strlen(MESSAGE));   //这里的写有点像异步操作，即把数据扔给它，写完了给我个通知(调用callback)
+	bufferevent_write(bev, MESSAGE1, strlen(MESSAGE1));
+	bufferevent_write(bev, MESSAGE2, strlen(MESSAGE2));
 }
 
 static void
-conn_writecb(struct bufferevent *bev, void *user_data)
+conn_writecb(struct bufferevent *bev, void *user_data)  //在写返回以后，会调用这个callback
 {
 	struct evbuffer *output = bufferevent_get_output(bev);
 	if (evbuffer_get_length(output) == 0) {
 		printf("flushed answer\n");
-		bufferevent_free(bev);
+		bufferevent_free(bev);    //断开socket 连接，FIN, 同时释放资源
 	}
 }
 
@@ -147,10 +151,10 @@ static void conn_writecb(evutil_socket_t fd, short events, void* user_data) {
 	//struct event_base *base = user_data;
     int rc = -1;
     rc = write(fd, MESSAGE, strlen(MESSAGE));
-    if(rc == strlen(MESSAGE)) {
+    if(rc == strlen(MESSAGE)) {     //这里有点像同步操作，即在等待write返回，如果写大量的数据，需要手动处理循环写和等待。
 		printf("xqq flushed answer\n");
         event_free(ev); //应该记得删除这个event, 否则会有mem leak
-        close(fd);
+        close(fd);  //断开socket 连接，FIN
     } else {
 		printf("xqq not flushed answer\n");
     }
